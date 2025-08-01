@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="dropArea.js" defer></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&family=Roboto&display=swap" rel="stylesheet">
+
+</head>
+<body>
+    <div class="app">
+        <div class="sidebar"></div>
+        <div class="main-container">
+            <div class="navbar">
+                <div class="nav-left">
+                    <ul>
+                        <li><a href="#">Home</a></li>
+                        <li><a href="#">Tools</a></li>
+                    </ul>
+                </div>
+                <div class="nav-right">
+                    <ul>
+                        <li><a href="#">Donate</a></li>
+                        <li><a href="#">Dark Mode</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="content-container">
+                <div class="content">
+                    <h1 style="margin: 8px 0 0 0">Image to Color Palette</h1>
+                    <div class="settings-container">
+                        <span class="settings-label">1. Select color picking mode</span>
+                        <div class="settings">
+                            <div class="mode-button active" data-mode="1">Distance</div>
+                            <div class="mode-button" data-mode="2">Volume</div>
+                            <div class="mode-button" data-mode="3">Pastel</div>
+                            <div class="mode-button" data-mode="4">Manual</div>
+                        </div>
+                    </div>
+
+                    <div class="drop-container">
+                        <div class="drop-area">
+                            <div class="drop-area-label">2. Drag & Drop your image here<br>or</div>
+                            <button class="load-image-button" onclick="document.getElementById('file-input').click()">Select Image</button>
+                            <input type="file" id="file-input" accept="image/*" style="display: none;">
+                            <div class="uploaded-image-container hidden">
+                                <img class="uploaded-image" src="" alt="Uploaded image">
+                            </div>
+                            <div class="reset-button hidden" onclick="updateDropdownUI(false)">X</div>
+                        </div>
+                    </div>
+
+                    <div class="swatch-container">
+
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+
+        // Initialize variables
+        let app = document.querySelector('.app');
+        const dropArea = document.querySelector('.drop-area');
+        const dropAreaLabel = document.querySelector('.drop-area-label');
+        const loadImageButton = document.querySelector('.load-image-button');
+        const uploadedImageContainer = document.querySelector('.uploaded-image-container');
+        const uploadedImage = document.querySelector('.uploaded-image');
+        const fileInput = document.querySelector('#file-input');
+        const fileInputButton = document.querySelector('.load-image-button');
+        const resetButton = document.querySelector('.reset-button');
+        const swatchContainer = document.querySelector('.swatch-container');
+        const modeButtons_all = document.querySelectorAll('.settings .mode-button');
+
+        const balanceSaturationCheckbox = document.querySelector('#balanceSaturation');
+        const balanceBrightnessCheckbox = document.querySelector('#balanceBrightness');
+
+        let canvas, ctx;
+
+        // Initialize the application
+        const init = () => {
+            setupEventListeners();
+            initCanvas();
+        }
+
+        const setupEventListeners = () => {
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                });
+            });
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropArea.addEventListener(eventName, () => {
+                    dropArea.classList.add('highlight');
+                });
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, () => {
+                    dropArea.classList.remove('highlight');
+                });
+            });
+
+            modeButtons_all.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const currentActive = document.querySelector('.settings .mode-button.active')
+                    currentActive.classList.remove("active");
+                    e.target.classList.add("active");
+                })
+            })
+
+            dropArea.addEventListener('drop', handleDrop);
+            fileInput.addEventListener('change', handleUpload);
+        }
+
+        const initCanvas = () => {
+            canvas = document.createElement('canvas');
+            ctx = canvas.getContext('2d', { willReadFrequently: true });
+        }
+
+        const handleUpload = (e) => {
+            handleFile(e.target.files[0]);
+        }
+
+        const handleDrop = (e) => {
+            const dt = e.dataTransfer;
+            const file = dt.getData('text/uri-list') || dt.files[0];
+
+            if(file) {
+                console.log('handleDrop', file)
+                handleFile(file);
+            }
+            
+        }
+
+        const handleFile = async (file) => {
+            
+            if (file?.type?.startsWith('image/')){
+                const fileURL = await readFileAsDataURL(file);
+
+                uploadedImage.src = await fileURL;
+                await new Promise((resolve) => {
+                    uploadedImage.onload = resolve;
+                });
+                updateDropdownUI(true);
+            }
+
+            //console.log('handleFile', uploadedImage.src);
+            analyzeImage(uploadedImage);
+        }
+
+        const readFileAsDataURL = (file) => {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result); // Success
+                reader.onerror = (e) => reject(new Error("Failed to read file")); // Error
+                reader.readAsDataURL(file); // Start reading
+            });
+        }
+
+        const updateDropdownUI = (imageIsLoaded) => {
+
+            if(imageIsLoaded) {
+                loadImageButton.classList.add('hidden');
+                dropAreaLabel.classList.add('hidden');
+                dropArea.classList.add('active');
+                uploadedImageContainer.classList.remove('hidden');
+                resetButton.classList.remove('hidden');
+            } else {
+                loadImageButton.classList.remove('hidden');
+                dropAreaLabel.classList.remove('hidden');
+                dropArea.classList.remove('active');
+                uploadedImageContainer.classList.add('hidden');
+                resetButton.classList.add('hidden');
+                swatchContainer.innerHTML = "";
+            }
+            
+        }
+
+        const matchUIColors = async (statistics) => {
+            let mostHue = Object.keys(statistics).sort((a,b)=>{return statistics[b].count - statistics[a].count;})[0];
+            let mostSaturation = Object.keys(statistics[mostHue].saturation).sort((a,b)=>{return statistics[mostHue].saturation[b] - statistics[mostHue].saturation[a]})[0];
+            dropArea.classList.add('color-change-transition');
+            await sleep(500);
+            dropArea.style.backgroundColor = `hsl(${mostHue}deg,${mostSaturation}%,90%)`;
+            dropArea.style.border = `2px dashed hsl(${mostHue}deg,${mostSaturation}%,70%)`;
+            resetButton.style.border = `2px solid hsl(${mostHue}deg,${mostSaturation}%,70%)`;
+            resetButton.style.color = `hsl(${mostHue}deg,${mostSaturation}%,70%)`;
+            loadImageButton.style.color = `hsl(${mostHue}deg,${mostSaturation}%,90%)`;
+            loadImageButton.style.backgroundColor = `hsl(${mostHue}deg,${mostSaturation}%,50%)`;
+            await sleep(500);
+            dropArea.classList.remove('color-change-transition');  
+        }
+
+        const analyzeImage = async (img) => {
+
+            // --- Initialize
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0, img.width, img.height);
+            
+            // --- Get pixeldata from image ---
+            const imageData = ctx.getImageData(0, 0, img.width, img.height);
+            const pixels = imageData.data;
+            console.log('Raw image data', pixels)
+
+            // --- Convert pixeldata to RGB Array
+            const rgbPixels = pixelDataToRGB(pixels, img.width, img.height, 4, 4);
+            console.log('rgbPixels', rgbPixels);
+            //displayPixels(rgbPixels ,'rgb');
+
+            // --- Convert RGB Array to HSL Array
+            const hslPixels = rgbPixels.map( pixel => { return rgbToHsl(pixel.r, pixel.g, pixel.b) })
+            console.log('hslPixels',hslPixels);
+            //displayPixels(hslPixels ,'hsl');
+
+            // --- Collect information about the pixels
+            let filtered_hslPixels;
+            let statistics = createHslStatistics(hslPixels);
+
+            // --- Adjust UI to match uploaded image
+            matchUIColors(statistics);
+
+            // --- Filter down the swatches if there are too many colors
+            // statistics = colorMode_1(statistics, hslPixels);
+            // console.log('colorMode_1',statistics);
+            // analyzeStatistics(statistics)
+            // to color the borders
+
+            const modeSelect = document.querySelector('.mode-button.active');
+            // --- Mode 1: Simple
+            if (modeSelect.dataset.mode == '1' ){
+                filtered_hslPixels = colorMode_1(hslPixels);
+                console.log('colorMode_1',filtered_hslPixels);
+            }
+
+            // --- Mode 2: Analyse statistics 
+            if (modeSelect.dataset.mode == '2' ){
+                filtered_hslPixels = colorMode_2(statistics);
+                console.log('colorMode_2',filtered_hslPixels);
+            }
+
+            // --- Mode 3: Pastell
+            if (modeSelect.dataset.mode == '3' ){
+                filtered_hslPixels = colorMode_3(statistics);
+                console.log('colorMode_3',filtered_hslPixels);
+            }
+
+            
+            // --- Balance lightness and saturation
+            //if (balanceBrightnessCheckbox.checked) balanceBrightness(filtered_hslPixels);
+            //if (balanceSaturationCheckbox.checked) balanceSaturation(filtered_hslPixels);
+        
+            // --- Render results onto website
+            swatchContainer.innerHTML = "";
+            for (let i = 0; i < filtered_hslPixels.length; i++){
+                let swatch = document.createElement('div');
+                swatch.style.backgroundColor = `hsl(${filtered_hslPixels[i].h}deg,${filtered_hslPixels[i].s}%,${filtered_hslPixels[i].l}%)`;
+                swatch.style.opacity = '0';
+                swatch.classList.add('color');
+                
+                //swatchColor.style.color = `hsl(${filtered_hslPixels[i].h}deg,${filtered_hslPixels[i].s}%,${filtered_hslPixels[i].l < 30 ? 80 : 20}%)`
+                swatch.dataset.hsl = `H: ${filtered_hslPixels[i].h}, S: ${filtered_hslPixels[i].s}, L: ${filtered_hslPixels[i].l}`;
+                swatch.dataset.hex = hslToHex(filtered_hslPixels[i].h, filtered_hslPixels[i].s, filtered_hslPixels[i].l);
+                swatchContainer.appendChild(swatch);
+            }
+
+            let swatches = swatchContainer.querySelectorAll('.color');
+            for (let i = 0; i < swatches.length; i++ ){
+                swatches[i].classList.add('animate-entry');
+                await sleep(100);
+            }
+
+            // --- Maybe Cluster in darks, lights, well saturated ~ 40-60 
+            // --- Check what is available and assemble palette
+
+            // --- Check Hue families. If enough "healthy" ones do a 360/10 => 36 split
+            // --- Else do monochromatic
+        }
+
+        const pixelDataToRGB = (pixelData, width, height, skipW, skipH) => {
+            const filteredRgbPixels = [];
+            for (let y = 0; y < height; y += skipH) {        // Uneven rows (0-based index, so even numbers)
+                for (let x = 0; x < width; x += skipW) {     // Uneven columns
+                    const i = (y * width + x) * 4;
+                    const r = pixelData[i];
+                    const g = pixelData[i + 1];
+                    const b = pixelData[i + 2];
+
+                    filteredRgbPixels.push({r, g, b})
+                }
+            }
+
+            return filteredRgbPixels;
+        }
+
+        const rgbToHsl = (r, g, b) => {
+            r /= 255, g /= 255, b /= 255;
+            const max = Math.max(r, g, b), min = Math.min(r, g, b);
+            let h, s, l = (max + min) / 2;
+
+            if (max === min) {
+                h = s = 0; // achromatic
+            } else {
+                const d = max - min;
+                s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+                switch (max) {
+                    case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                    case g: h = (b - r) / d + 2; break;
+                    case b: h = (r - g) / d + 4; break;
+                }
+                h /= 6;
+            }
+
+            return { h: parseFloat((h * 360).toFixed(2)), s: parseFloat((s * 100).toFixed(2)), l: parseFloat((l * 100).toFixed(2))};
+        }
+
+        const hslToHex = (h, s, l) => {
+            // Convert HSL to RGB first
+            s /= 100;
+            l /= 100;
+            
+            let c = (1 - Math.abs(2 * l - 1)) * s;
+            let x = c * (1 - Math.abs((h / 60) % 2 - 1));
+            let m = l - c / 2;
+            let r = 0, g = 0, b = 0;
+            
+            if (0 <= h && h < 60) {
+                r = c; g = x; b = 0;
+            } else if (60 <= h && h < 120) {
+                r = x; g = c; b = 0;
+            } else if (120 <= h && h < 180) {
+                r = 0; g = c; b = x;
+            } else if (180 <= h && h < 240) {
+                r = 0; g = x; b = c;
+            } else if (240 <= h && h < 300) {
+                r = x; g = 0; b = c;
+            } else if (300 <= h && h < 360) {
+                r = c; g = 0; b = x;
+            }
+            
+            // Convert RGB to Hex
+            r = Math.round((r + m) * 255);
+            g = Math.round((g + m) * 255);
+            b = Math.round((b + m) * 255);
+
+            console.log(r, g, b)
+            
+            return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+        }      
+
+        const createHslStatistics = (hslPixels) => {
+
+            //const statistics = initializeStatistics();
+            const statistics = {};
+
+            for (let i = 0; i < 360; i += 18){
+                statistics[i] = {
+                    count : 0,
+                    saturation : {0:0, 20:0, 40:0, 60:0, 80:0, 100:0},
+                    light : {0:0, 20:0, 40:0, 60:0, 80:0, 100:0}
+                }
+            }
+
+
+            hslPixels.forEach(pixel => {
+
+                let hue, saturation, light;
+                
+                for (let i = 0; i < 360; i += 18){
+                    if (pixel.h >= i && pixel.h < (i+18)){
+                        hue = i;
+                        break;
+                    };
+                }
+
+                for (let i = 0; i < 100; i += 20){
+                    if (pixel.s >= i && pixel.s < (i+20)){
+                        saturation = i;
+                        break;
+                    };
+                }
+
+                for (let i = 0; i < 100; i += 20){
+                    if (pixel.l >= i && pixel.l < (i+20)){
+                        light = i;
+                        break;
+                    };
+                }
+
+                //if (!statistics[hue]?.count) statistics[hue] = {count : 0};
+                //if (!statistics[hue]?.saturation) statistics[hue].saturation = {[saturation] : 0};
+                //if (!statistics[hue]?.light) statistics[hue].light = {[light] : 0};
+
+                statistics[hue].count++;
+                statistics[hue].saturation[saturation]++;
+                statistics[hue].light[light]++;
+
+            })
+            
+            console.log('statistics', statistics);
+            return statistics;
+
+        }
+
+        const colorMode_1 = (hslPixels) => {
+
+            let pixelStorageArr = [];
+            let colorAdjustments = false;
+
+            // Remove duplicates
+            let factor = 1;
+            pixelStorageArr = removeDuplicates(hslPixels, factor);
+            console.log('1 removeDuplicates ', pixelStorageArr.length);
+            if(pixelStorageArr.length <= 10) return sortHSLArray(pixelStorageArr);
+            
+
+            // Remove too light / dark pixels
+            let maxLight = 89;
+            let minLight = 11;
+            pixelStorageArr = pixelStorageArr.filter(px => {  return px.l < maxLight && px.l > minLight; })
+            console.log('remove light darks ', pixelStorageArr.length);
+            if(pixelStorageArr.length <= 10) return sortHSLArray(pixelStorageArr);
+
+            // Remove greys 
+            pixelStorageArr = pixelStorageArr.filter(px => { return px.s > 15; })
+            console.log('remove greys ', pixelStorageArr.length);
+            if(pixelStorageArr.length <= 10) return sortHSLArray(pixelStorageArr);
+            //console.log('Filter out greys ',pixelStorageArr);
+
+            // Remove duplicates
+            factor = 3;
+            pixelStorageArr = removeDuplicates(pixelStorageArr, factor);
+            console.log('2 removeDuplicates ', pixelStorageArr.length);
+            if(pixelStorageArr.length <= 10) return sortHSLArray(pixelStorageArr);
+
+            // Remove too light / dark pixels
+            maxLight = 84;
+            minLight = 16;
+            pixelStorageArr = pixelStorageArr.filter(px => {return px.l < maxLight && px.l > minLight; })
+            console.log('2 remove dark and lights ', pixelStorageArr.length);
+            if(pixelStorageArr.length <= 10) return sortHSLArray(pixelStorageArr);
+
+            // Remove greys 
+            pixelStorageArr = pixelStorageArr.filter(px => { return px.s > 25; })
+            console.log('2 remove greys ', pixelStorageArr.length);
+            if(pixelStorageArr.length <= 10) return sortHSLArray(pixelStorageArr);
+
+            while (pixelStorageArr.length > 10 || factor > 100) {
+                factor++;
+                pixelStorageArr = removeDuplicates(pixelStorageArr, factor);
+            }
+
+            return sortHSLArray(pixelStorageArr);
+            
+        }
+
+        const colorMode_2 = (statistics) => {
+
+            let hueSaturationMapping = Object.keys(statistics).map( key1 => {
+                
+                let saturion_all = Object.keys(statistics[key1].saturation).map( key2 => {    
+                    return { "h": key1, "s":key2, "count":statistics[key1].saturation[key2] };
+                })
+
+                console.log('saturion_all', saturion_all)
+
+                let light_most = Object.keys(statistics[key1].light).map(key2 => {
+                    return {"light" : key2, count: statistics[key1].light[key2]}
+                }).sort((a,b) => { return b.count-a.count;})[0];
+
+                console.log('light_most', light_most)
+
+                let mappedHSL = saturion_all.map(el => { 
+                    el.l = light_most.light;
+                    return el;
+                })
+
+                console.log('mappedHSL', mappedHSL)
+
+                return mappedHSL;
+            })
+
+            return sortHSLArray(hueSaturationMapping.flat().filter(a => { 
+                return a.s && a.s > 20 && a.s < 80 && a.count > 0 && a.l > 0 && a.l < 100 && a.l
+            }).sort((a,b) => {return b.count - a.count}).slice(0, 10))
+
+        }
+
+        const colorMode_3 = (statistics) => {
+
+            let hueSaturationMapping = Object.keys(statistics).map( key1 => {
+
+                let saturationCountArr = Object.keys(statistics[key1].saturation).map( key2 => {    
+                    return { "h": key1, "s": key2, "count": statistics[key1].saturation[key2] };
+                })
+
+                let light_most = Object.keys(statistics[key1].light).map(key2 => {
+                    return {"light" : key2, count: statistics[key1].light[key2]}
+                }).sort((a,b) => { return b.count-a.count;})[0];
+
+            })
+
+            console.log(statistics.flat())
+
+        }
+
+        const removeDuplicates = (hslPixels, factor = 1) => {
+
+            pixelStorageArr = [];
+            hslPixels.forEach(pixel => {
+                const similar = pixelStorageArr.find( storedPx => { 
+                    return  hueDistance(pixel.h,storedPx.h) <= (7 + factor) &&
+                            saturationDistance(pixel.s,storedPx.s) <= (9 + factor) &&
+                            lightDistance(pixel.l,storedPx.l) <= (9 + factor)
+                    }
+                )
+                if (!similar) pixelStorageArr.push(pixel);
+            })
+
+            return pixelStorageArr;
+        }
+
+        const displayPixels = (pixelArr, mode) => {
+            let testContainer = document.createElement('div');
+            testContainer.style.marginBottom = '20px';
+            pixelArr.forEach(pixel => {
+                let test = document.createElement('div');
+                test.style.width = '10px';
+                test.style.height = '10px';
+                test.style.float = 'left'
+
+                if (mode == 'rgb') {
+                    test.classList.add('rgb')
+                    test.style.backgroundColor = `rgb(${pixel.r}, ${pixel.g}, ${pixel.b})`;
+                } else if (mode == 'hsl') {
+                    test.classList.add('hsl')
+                    test.dataset.hsl = `hsl(${pixel.h}deg ${pixel.s}% ${pixel.l}%)`;
+                    test.style.backgroundColor = `hsl(${pixel.h}deg ${pixel.s}% ${pixel.l}%)`;
+                }
+
+                testContainer.appendChild(test);
+            })
+
+            app.appendChild(testContainer)
+        }
+
+        const sortHSLArray = (arr) => {
+            return arr.sort((a, b) => {
+                // Convert H, S to numbers for comparison
+                const hA = parseFloat(a.h);
+                const hB = parseFloat(b.h);
+                const sA = parseFloat(a.s);
+                const sB = parseFloat(b.s);
+
+                // First compare by H
+                if (hA < hB) return -1;
+                if (hA > hB) return 1;
+                
+                // If H is equal, compare by S
+                if (sA < sB) return -1;
+                if (sA > sB) return 1;
+                
+                // If both H and S are equal, maintain original order
+                return 0;
+            });
+        }
+
+        const balanceBrightness = (hslPixels) => {
+
+            let lightSum = 0;
+            let lightAverage = 0;
+
+            hslPixels.forEach(pixel => { lightSum += pixel.l; })
+            lightAverage = lightSum / hslPixels.length;
+
+            hslPixels.forEach(pixel => { pixel.l = lightAverage; })
+
+        }
+  
+        const balanceSaturation = (hslPixels) => {
+
+            let saturationSum = 0;
+            let saturionAverage = 0;
+
+            hslPixels.forEach(pixel => { saturationSum += pixel.s; })
+            saturionAverage = saturationSum / hslPixels.length;
+            hslPixels.forEach(pixel => { pixel.s = saturionAverage; })
+
+        }
+
+        const hueDistance = (h1, h2) => {
+            const diff = Math.abs(h1 - h2);
+            return Math.min(diff, 360 - diff);
+        }
+
+        const saturationDistance = (s1, s2) => {
+            const diff = Math.abs(s1 - s2);
+            return diff;
+        }
+
+        const lightDistance = (l1, l2) => {
+            const diff = Math.abs(l1 - l2);
+            return diff;
+        }
+
+        const sleep = (ms) => {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+
+        init();
+    </script>
+</body>
+</html>
