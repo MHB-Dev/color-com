@@ -249,7 +249,7 @@
 
             // --- Mode 3: Pastell
             if (modeSelect.dataset.mode == '3' ){
-                filtered_hslPixels = colorMode_3(statistics);
+                filtered_hslPixels = colorMode_3(hslPixels);
                 console.log('colorMode_3',filtered_hslPixels);
             }
 
@@ -470,20 +470,20 @@
                     return { "h": key1, "s":key2, "count":statistics[key1].saturation[key2] };
                 })
 
-                console.log('saturion_all', saturion_all)
+                //console.log('saturion_all', saturion_all)
 
                 let light_most = Object.keys(statistics[key1].light).map(key2 => {
                     return {"light" : key2, count: statistics[key1].light[key2]}
                 }).sort((a,b) => { return b.count-a.count;})[0];
 
-                console.log('light_most', light_most)
+                //console.log('light_most', light_most)
 
                 let mappedHSL = saturion_all.map(el => { 
                     el.l = light_most.light;
                     return el;
                 })
 
-                console.log('mappedHSL', mappedHSL)
+                //console.log('mappedHSL', mappedHSL)
 
                 return mappedHSL;
             })
@@ -494,32 +494,42 @@
 
         }
 
-        const colorMode_3 = (statistics) => {
+        const colorMode_3 = (hslPixels) => {
 
-            let hueSaturationMapping = Object.keys(statistics).map( key1 => {
+            let pixelStorageArr = [];
+            let colorAdjustments = false;
 
-                let saturationCountArr = Object.keys(statistics[key1].saturation).map( key2 => {    
-                    return { "h": key1, "s": key2, "count": statistics[key1].saturation[key2] };
-                })
+            // Remove duplicates
+            let factor = 1;
+            let ignoreHue = false;
+            let ignoreSaturation = true;
+            let ignoreLight = true;
+            pixelStorageArr = removeDuplicates(hslPixels, factor, ignoreHue, ignoreSaturation, ignoreLight);
+            console.log('1 removeDuplicates ', pixelStorageArr.length);
+            console.log('pixelStorageArr ', pixelStorageArr);
+            if(pixelStorageArr.length <= 10) return sortHSLArray(pixelStorageArr);
 
-                let light_most = Object.keys(statistics[key1].light).map(key2 => {
-                    return {"light" : key2, count: statistics[key1].light[key2]}
-                }).sort((a,b) => { return b.count-a.count;})[0];
-
-            })
-
-            console.log(statistics.flat())
+            // Remove greys 
+            pixelStorageArr = pixelStorageArr.filter(px => { return px.s > 15; })
+            console.log('remove greys ', pixelStorageArr.length);
+            if(pixelStorageArr.length <= 10) return sortHSLArray(pixelStorageArr);
+            console.log('Filter out greys ',pixelStorageArr);
 
         }
 
-        const removeDuplicates = (hslPixels, factor = 1) => {
+        const removeDuplicates = (hslPixels, factor = 1, ignoreHue = false, ignoreSaturation = false, ignoreLight = false) => {
 
             pixelStorageArr = [];
             hslPixels.forEach(pixel => {
                 const similar = pixelStorageArr.find( storedPx => { 
-                    return  hueDistance(pixel.h,storedPx.h) <= (7 + factor) &&
-                            saturationDistance(pixel.s,storedPx.s) <= (9 + factor) &&
-                            lightDistance(pixel.l,storedPx.l) <= (9 + factor)
+
+                    let similarHue = hueDistance(pixel.h,storedPx.h) <= (7 + factor);
+                    let similarSaturation = saturationDistance(pixel.s,storedPx.s) <= (9 + factor);
+                    let similarLight = lightDistance(pixel.l,storedPx.l) <= (9 + factor);
+
+                    return  (similarHue || similarHue) &&
+                            (similarSaturation || similarSaturation) &&
+                            (similarLight || ignoreLight)
                     }
                 )
                 if (!similar) pixelStorageArr.push(pixel);
